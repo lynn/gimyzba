@@ -192,22 +192,21 @@ class GismuScorer:
         return float(score) / len(input_chars)
 
     def score_dyad_by_pattern(self, candidate, input_word):
-        patterns = self.gismu_dyad_patterns(candidate)
-        return 2 if self.matches_any_pattern(patterns, input_word) else 0
-
-    def gismu_dyad_patterns(_, gismu):
-        patterns = []
-        for i, c in enumerate(gismu[:-2]):
-            patterns.append('%s(%s|.%s)' % (c, gismu[i + 1], gismu[i + 2]))
-        patterns.append('%s%s' % (gismu[-2], gismu[-1]))
-        return patterns
-
-    def matches_any_pattern(_, patterns, word):
-        return next((True for pat in patterns if re.search(pat, word)), False)
+        l = len(candidate)
+        iw02 = input_word[0::2]
+        iw12 = input_word[1::2]
+        for i in range(l - 2):
+            dyad = candidate[i] + candidate[i + 2]
+            if dyad in iw02 or dyad in iw12:
+                return 2
+        for i in range(l - 1):
+            if candidate[i] + candidate[i + 1] in input_word:
+                return 2
+        return 0
 
     def calculate_weighted_sum(self, scores):
         # Multiply each score by the given weight, then sum weighted scores
-        return reduce(float.__add__, map(float.__mul__, scores, self.weights))
+        return sum(map(float.__mul__, scores, self.weights))
 
 class GismuMatcher:
 
