@@ -89,17 +89,14 @@ XADD = lambda a,b: [x+y for x in a for y in b]
 #   http://rosettacode.org/wiki/Longest_common_subsequence
 
 def lcs_length(a, b):
-    return lcs_matrix(a, b)[-1][-1]
-
-def lcs_matrix(a, b):
-    matrix = [[0 for j in range(len(b)+1)] for i in range(len(a)+1)]
-    for i, x in enumerate(a):
-        for j, y in enumerate(b):
-            if x == y:
-                matrix[i+1][j+1] = matrix[i][j] + 1
-            else:
-                matrix[i+1][j+1] = max(matrix[i+1][j], matrix[i][j+1])
-    return matrix
+    W = len(b)+1
+    H = len(a)+1
+    matrix = W*H * [0]
+    for ix, x in enumerate(a):
+        for iy, y in enumerate(b):
+            i = ix*W+iy
+            matrix[i + W + 1] = matrix[i] + 1 if x == y else max(matrix[i + 1], matrix[i + W])
+    return matrix[-1]
 
 class GismuGenerator:
 
@@ -130,13 +127,12 @@ class GismuGenerator:
         predicates = []
         slen = len(shape)
         for i, c in enumerate(shape[:-1].lower()):
-            if (c == 'c'):
-                if (shape[i+1] == 'c'):
-                    predicates.append(self.validator_for_cc(i))
-                    if (i < (slen-2)) and (shape[i+2] == 'c'):
-                        predicates.append(self.validator_for_ccc(i))
-                    if (i < (slen-4)) and (i>0) and (shape[i:i+5] == 'ccvcv'):
-                        predicates.append(self.invalidator_for_initial_cc(i))
+            if c == shape[i+1] == 'c':
+                predicates.append(self.validator_for_cc(i))
+                if i < slen-2 and shape[i+2] == 'c':
+                    predicates.append(self.validator_for_ccc(i))
+                if 0 < i < slen-4 and shape[i:i+5] == 'ccvcv':
+                    predicates.append(self.invalidator_for_initial_cc(i))
         return self.validator_for_predicates(predicates)
 
     def validator_for_cc(_, i):
@@ -157,18 +153,12 @@ class GismuGenerator:
         return lambda x: x[i:i+2] not in VALID_CC_INITIALS
 
     def validator_for_predicates(_, predicates):
-        if len(predicates) == 0:
-            return lambda x: True
-        elif len(predicates) == 1:
-            return predicates[0]
-        else:
-            return lambda x: \
-              not next((True for p in predicates if p(x) == False), False)
+        return lambda x: all(p(x) for p in predicates)
 
 class GismuScorer:
 
     def __init__(self, input_words, weights):
-        self.input_words_chars = [ [ y for y in list(x) ] for x in input_words ]
+        self.input_words = input_words
         self.weights = weights
 
     def compute_score(self, candidate):
@@ -178,18 +168,18 @@ class GismuScorer:
 
     def compute_similarity_scores(self, candidate):
       chars = [ x for x in list(candidate) ]
-      return [ self.compute_similarity_score(candidate, chars, word_chars) \
-               for word_chars in self.input_words_chars ]
+      return [ self.compute_similarity_score(candidate, word) \
+               for word in self.input_words ]
 
-    def compute_similarity_score(self, candidate, candidate_chars, input_chars):
-        lcs_len = lcs_length(candidate_chars, input_chars)
+    def compute_similarity_score(self, candidate, input_word):
+        lcs_len = lcs_length(candidate, input_word)
         if lcs_len < 2:
             score = 0
         elif lcs_len == 2:
-            score = self.score_dyad_by_pattern(candidate, ''.join(input_chars))
+            score = self.score_dyad_by_pattern(candidate, input_word)
         else:
             score = lcs_len
-        return float(score) / len(input_chars)
+        return float(score) / len(input_word)
 
     def score_dyad_by_pattern(self, candidate, input_word):
         l = len(candidate)
