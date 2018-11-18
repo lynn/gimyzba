@@ -14,14 +14,11 @@
 
 import sys
 import re
-import threading
-import queue as Queue
+from multiprocessing import Pool
 
 from optparse import OptionParser
 
-from gismu_utils import C, V, LANGUAGE_WEIGHTS, \
-  GismuGenerator, GismuScorer, GismuMatcher
-
+from gismu_utils import C, V, LANGUAGE_WEIGHTS, GismuGenerator, GismuScorer, GismuMatcher
 from marshal import dump
 
 VERSION = "v0.5"
@@ -54,12 +51,9 @@ def main(words, params):
     weights = [float(weight) for weight in re.split("\s*,\s*", params.weights)]
 
     scorer = GismuScorer(words, weights)
-    if params.workers == 1:
-        log("Scoring candidates...")
-        scores = compute_scores(candidates, scorer, params)
-    else:
-        log(f"Scoring candidates with {params.workers} workers...")
-        scores = compute_scores_threaded(candidates, scorer, params)
+    log("Scoring candidates...")
+    with Pool() as p:
+        scores = p.map(scorer.compute_score_with_name, candidates)
 
     log("Sorting scores...")
     scores.sort(key = lambda x: -x[0])
@@ -90,46 +84,6 @@ def letters_for_words(words):
     word_set = set([ l for word in words for l in list(word) ])
     return word_set.intersection(C), word_set.intersection(V)
 
-def compute_scores(candidates, scorer, params):
-    quiet = params.quiet
-    scores = []
-    for i, candidate in enumerate(candidates):
-        score = compute_score(scorer, candidate)
-        scores.append(score)
-        if (not quiet) and (i % 100 == 0):
-            log(i)
-    return scores
-
-def compute_score(scorer, candidate):
-    weighted_sum, language_scores = scorer.compute_score(candidate)
-    return (weighted_sum, candidate, language_scores)
-
-def compute_scores_threaded(candidates, scorer, params):
-    input_queue = Queue.Queue()
-    for candidate in candidates:
-        input_queue.put(candidate)
-    output_queue = Queue.Queue()
-
-    workers = []
-    for x in range(params.workers):
-        worker = QueueWorker(input_queue, output_queue, scorer, params)
-        worker.start()
-        workers.append(worker)
-    for worker in workers:
-        worker.join()
-    return read_scores_from_queue(output_queue)
-
-def read_scores_from_queue(score_queue):
-    scores = []
-    queue_empty = False
-    while not queue_empty:
-        try:
-            score = score_queue.get_nowait()
-            scores.append(score)
-        except Queue.Empty:
-            queue_empty = True
-    return scores
-
 def deduplicate_candidates(matcher, scores):
     unique_candidate = None
     for (score, candidate, _) in scores:
@@ -140,46 +94,6 @@ def deduplicate_candidates(matcher, scores):
         else:
             log(f"Candidate '{candidate}' too much like gismu '{gismu}'.")
     return unique_candidate
-
-##
-
-class QueueWorker(threading.Thread):
-
-    def __init__(self, input_queue, output_queue, scorer, params):
-        self.input_queue = input_queue
-        self.output_queue = output_queue
-        self.scorer = scorer
-        self.params = params
-        threading.Thread.__init__(self)
-
-    def run(self):
-        quiet = self.params.quiet
-        i = 0
-        while 1:
-            candidate = self.read_input()
-            if candidate == None:
-                break
-            self.process_input(candidate)
-
-            i += 1
-            if (not quiet) and (i % 100 == 0):
-                pass
-                # print >>sys.stderr, "\010" * 9, # backspace
-                # print >>sys.stderr, i,
-
-    def read_input(self):
-        candidate = None
-        try:
-            candidate = self.input_queue.get(True, 2) # block for up to 2s
-        except Queue.Empty:
-            pass
-        return candidate
-
-    def process_input(self, candidate):
-        weighted_sum, language_scores = self.scorer.compute_score(candidate)
-        self.output_queue.put((weighted_sum, candidate, language_scores))
-
-##
 
 def check_weights_option(option, opt_str, value, parser):
     if re.match('(\d{4}|finprims)$', value):
@@ -243,9 +157,6 @@ if __name__ == '__main__':
                        default="ccvcv,cvccv", dest="shapes",
                        type="string", action="callback",
                        callback=check_shapes_option)
-
-    options.add_option("-n", "--number-workers",
-                       type="int", default="1", dest="workers")
 
     options.add_option("-d", "--deduplicate",
                        type="string", dest="gismu_list_path")

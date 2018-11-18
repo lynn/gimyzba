@@ -166,6 +166,10 @@ class GismuScorer:
         weighted_sum = self.calculate_weighted_sum(similarity_scores)
         return weighted_sum, similarity_scores
 
+    def compute_score_with_name(self, candidate):
+        ws, ss = self.compute_score(candidate)
+        return (ws, candidate, ss)
+
     def compute_similarity_scores(self, candidate):
       chars = [ x for x in list(candidate) ]
       return [ self.compute_similarity_score(candidate, word) \
