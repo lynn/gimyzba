@@ -64,7 +64,7 @@ def main(words, params):
 
     if params.gismu_list_path:
         log("Reading list of gismu... ")
-        gismus = [line.strip() for line in file(params.gismu_list_path)]
+        gismus = [line.strip() for line in open(params.gismu_list_path)]
         matcher = GismuMatcher(gismus)
         log("Exluding candidates similar to existing gismu...")
         candidate = deduplicate_candidates(matcher, scores)

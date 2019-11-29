@@ -210,7 +210,7 @@ class GismuMatcher:
 
     def find_similar_gismu(self, candidate):
         candidate = candidate.rstrip()
-        patterns = map(lambda x:SIMILARITIES.get(x, '.'), candidate)
+        patterns = [SIMILARITIES.get(x, '.') for x in candidate]
         # e.g. "rekpa" =~ /l.[gx][bf]./ where . matches NOTHING
 
         gismu = None
